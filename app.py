@@ -694,7 +694,7 @@ function finishGame() {
   started = false;
   overlay.style.display = 'flex';
 
-  title.textContent = 'YOU ARE A LEGEND!';
+  title.textContent = 'YOU ARE A LOSER!';
   title.style.color = '#ffe58a';
 
   panelText.innerHTML =
