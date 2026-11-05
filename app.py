@@ -9,31 +9,26 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom Streamlit styling
 st.markdown("""
 <style>
-    header, footer, #MainMenu {
-        visibility: hidden;
-    }
-
-    .stApp {
-        background: #08111b;
-    }
-
-    .block-container {
-        padding: 0 !important;
-        max-width: 100% !important;
-    }
+header, footer, #MainMenu {
+    visibility: hidden;
+}
+.stApp {
+    background: #08111b;
+}
+.block-container {
+    padding: 0 !important;
+    max-width: 100% !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# Game HTML, CSS and JavaScript
 game_html = r"""
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-
 <style>
 * {
     margin: 0;
@@ -97,6 +92,7 @@ canvas {
     z-index: 20;
     color: white;
     text-align: center;
+    pointer-events: auto;
 }
 
 #startbox {
@@ -106,6 +102,8 @@ canvas {
     border: 1px solid #3a849e;
     border-radius: 20px;
     box-shadow: 0 0 50px rgba(0, 200, 255, 0.15);
+    position: relative;
+    z-index: 30;
 }
 
 #startbox h1 {
@@ -135,6 +133,12 @@ button {
 button:hover {
     transform: scale(1.06);
     box-shadow: 0 0 20px #05b9db;
+}
+
+#start {
+    position: relative;
+    z-index: 31;
+    pointer-events: auto;
 }
 
 #crosshair {
@@ -214,7 +218,7 @@ button:hover {
 <div id="help">
     <b>CONTROLS</b><br>
     W A S D - Move<br>
-    MOUSE - Look around<br>
+    MOUSE DRAG - Look around<br>
     SHIFT - Run<br>
     E - Collect crystals<br>
     ESC - Pause
@@ -239,7 +243,6 @@ button:hover {
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
 
@@ -375,7 +378,6 @@ for (let i = 0; i < 180; i++) {
     let x = (Math.random() - 0.5) * 210;
     let z = (Math.random() - 0.5) * 210;
 
-    // Keep the starting area relatively clear
     if (Math.sqrt(x*x + z*z) < 12) continue;
 
     createTree(x, z);
@@ -453,7 +455,6 @@ for (let i = 0; i < 15; i++) {
     crystal.castShadow = true;
     scene.add(crystal);
 
-    // Glow light
     const glow = new THREE.PointLight(
         0x00cfff,
         2,
@@ -469,31 +470,75 @@ for (let i = 0; i < 15; i++) {
 // CONTROLS
 // --------------------------------
 
-const controls = new THREE.PointerLockControls(
-    camera,
-    renderer.domElement
-);
-
 const startButton = document.getElementById("start");
 const center = document.getElementById("center");
 
+let gameStarted = false;
+let yaw = 0;
+let pitch = 0;
+let dragging = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
+
+// Start without requiring pointer lock.
+
 startButton.addEventListener("click", () => {
-    controls.lock();
-});
-
-controls.addEventListener("lock", () => {
+    gameStarted = true;
     center.style.display = "none";
+    startButton.innerText = "RESUME EXPLORING";
 });
 
-controls.addEventListener("unlock", () => {
-    center.style.display = "flex";
-    startButton.innerText = "RESUME EXPLORING";
+// Mouse drag to look around.
+
+document.addEventListener("mousedown", (e) => {
+    if (!gameStarted) return;
+
+    dragging = true;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+});
+
+document.addEventListener("mouseup", () => {
+    dragging = false;
+});
+
+document.addEventListener("mousemove", (e) => {
+
+    if (!gameStarted || !dragging) return;
+
+    const dx = e.clientX - lastMouseX;
+    const dy = e.clientY - lastMouseY;
+
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+
+    yaw -= dx * 0.004;
+    pitch -= dy * 0.003;
+
+    pitch = THREE.MathUtils.clamp(
+        pitch,
+        -1.2,
+        1.2
+    );
+
+    camera.rotation.order = "YXZ";
+    camera.rotation.y = yaw;
+    camera.rotation.x = pitch;
 });
 
 const keys = {};
 
 document.addEventListener("keydown", e => {
+
     keys[e.code] = true;
+
+    if (e.code === "Escape" && gameStarted) {
+
+        gameStarted = false;
+        center.style.display = "flex";
+        startButton.innerText = "RESUME EXPLORING";
+        dragging = false;
+    }
 });
 
 document.addEventListener("keyup", e => {
@@ -559,7 +604,8 @@ function collectCrystal() {
 }
 
 document.addEventListener("keydown", e => {
-    if (e.code === "KeyE" && controls.isLocked) {
+
+    if (e.code === "KeyE" && gameStarted) {
         collectCrystal();
     }
 });
@@ -569,8 +615,6 @@ document.addEventListener("keydown", e => {
 // --------------------------------
 
 const clock = new THREE.Clock();
-
-let velocity = new THREE.Vector3();
 
 const WORLD_LIMIT = 112;
 
@@ -582,18 +626,21 @@ function animate() {
     const time = clock.elapsedTime;
 
     // Crystal animation
+
     crystals.forEach((crystal, i) => {
 
         if (!crystal.userData.collected) {
 
             crystal.rotation.y += delta;
+
             crystal.position.y +=
                 Math.sin(time * 2 + i) * 0.003;
         }
     });
 
     // Player movement
-    if (controls.isLocked) {
+
+    if (gameStarted) {
 
         const speed = keys["ShiftLeft"] ||
                       keys["ShiftRight"] ? 18 : 9;
@@ -616,10 +663,21 @@ function animate() {
             sideways /= length;
         }
 
-        controls.moveForward(forward * speed * delta);
-        controls.moveRight(sideways * speed * delta);
+        // Move relative to camera direction.
 
-        // Keep the player within the world
+        const moveX =
+            Math.sin(yaw) * forward +
+            Math.cos(yaw) * sideways;
+
+        const moveZ =
+            -Math.cos(yaw) * forward +
+            Math.sin(yaw) * sideways;
+
+        camera.position.x += moveX * speed * delta;
+        camera.position.z += moveZ * speed * delta;
+
+        // World boundaries.
+
         camera.position.x = THREE.MathUtils.clamp(
             camera.position.x,
             -WORLD_LIMIT,
@@ -632,7 +690,8 @@ function animate() {
             WORLD_LIMIT
         );
 
-        // Follow terrain elevation
+        // Follow terrain elevation.
+
         const groundY = terrainHeight(
             camera.position.x,
             camera.position.z
@@ -669,7 +728,6 @@ window.addEventListener("resize", () => {
 </html>
 """
 
-# Display game
 components.html(
     game_html,
     height=760,
