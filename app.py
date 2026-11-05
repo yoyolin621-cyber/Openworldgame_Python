@@ -1,246 +1,192 @@
-673
-674
-675
-676
-677
-678
-679
-680
-681
-682
-683
-684
-685
-686
-687
-688
-689
-690
-691
-692
-693
-694
-695
-696
-697
-698
-699
-700
-701
-702
-703
-704
-705
-706
-707
-708
-709
-710
-711
-712
-713
-714
-715
-716
-717
-718
-719
-720
-721
-722
-723
-724
-725
-726
-727
-728
-729
-730
-731
-732
-733
-734
-735
-736
-737
-738
-739
-740
-741
-742
-743
-744
-745
-746
-747
-748
-749
-750
-751
-752
-753
-754
-755
-756
-757
-758
-759
-760
-761
-762
-763
-764
-765
-766
-767
-768
-769
-770
-771
-772
-773
-774
-775
-776
-777
-778
-779
-780
-781
-782
-783
-784
-785
-786
-787
-788
-789
-790
-791
-792
-793
-794
-795
-    }
-}
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
 
-document.addEventListener("keydown", e => {
-    if (e.code === "KeyE" && gameStarted) {
-        collectCrystal();
-    }
-});
+import streamlit as st
+import streamlit.components.v1 as components
 
-// --------------------------------
-// MOVEMENT AND ANIMATION
-// --------------------------------
-
-const clock = new THREE.Clock();
-
-let velocity = new THREE.Vector3();
-
-const WORLD_LIMIT = 112;
-
-function animate() {
-
-    requestAnimationFrame(animate);
-
-    const delta = Math.min(clock.getDelta(), 0.05);
-    const time = clock.elapsedTime;
-
-    // Crystal animation
-    crystals.forEach((crystal, i) => {
-
-        if (!crystal.userData.collected) {
-
-            crystal.rotation.y += delta;
-            crystal.position.y +=
-                Math.sin(time * 2 + i) * 0.003;
-        }
-    });
-
-    // Player movement
-    if (gameStarted) {
-
-        const speed = keys["ShiftLeft"] ||
-                      keys["ShiftRight"] ? 18 : 9;
-
-        let forward = 0;
-        let sideways = 0;
-
-        if (keys["KeyW"]) forward += 1;
-        if (keys["KeyS"]) forward -= 1;
-        if (keys["KeyA"]) sideways -= 1;
-        if (keys["KeyD"]) sideways += 1;
-
-        const length = Math.sqrt(
-            forward * forward +
-            sideways * sideways
-        );
-
-        if (length > 0) {
-            forward /= length;
-            sideways /= length;
-        }
-
-        // Move relative to the direction the camera is facing.
-        const moveX = Math.sin(yaw) * forward + Math.cos(yaw) * sideways;
-        const moveZ = -Math.cos(yaw) * forward + Math.sin(yaw) * sideways;
-        camera.position.x += moveX * speed * delta;
-        camera.position.z += moveZ * speed * delta;
-
-        // Keep the player within the world
-        camera.position.x = THREE.MathUtils.clamp(
-            camera.position.x,
-            -WORLD_LIMIT,
-            WORLD_LIMIT
-        );
-
-        camera.position.z = THREE.MathUtils.clamp(
-            camera.position.z,
-            -WORLD_LIMIT,
-            WORLD_LIMIT
-        );
-
-        // Follow terrain elevation
-        const groundY = terrainHeight(
-            camera.position.x,
-            camera.position.z
-        );
-
-        camera.position.y = groundY + 2.2;
-    }
-
-    renderer.render(scene, camera);
-}
-
-animate();
-
-// --------------------------------
-// RESPONSIVE SCREEN
-// --------------------------------
-
-window.addEventListener("resize", () => {
-
-    camera.aspect =
-        window.innerWidth / window.innerHeight;
-
-    camera.updateProjectionMatrix();
-
-    renderer.setSize(
-        window.innerWidth,
-        window.innerHeight
-    );
-});
-
-</script>
-
-</body>
-</html>
-"""
-
-# Display game
-components.html(
-    game_html,
-    height=760,
-    scrolling=False
+st.set_page_config(
+    page_title="World Explorer 3D",
+    page_icon="🌍",
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
+
+# Custom Streamlit styling
+st.markdown("""
+<style>
+    header, footer, #MainMenu {
+        visibility: hidden;
+    }
+
+    .stApp {
+        background: #08111b;
+    }
+
+    .block-container {
+        padding: 0 !important;
+        max-width: 100% !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Game HTML, CSS and JavaScript
+game_html = r"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+    background: #07121c;
+}
+
+canvas {
+    display: block;
+}
+
+#hud {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    color: white;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.panel {
+    background: rgba(5, 15, 25, 0.75);
+    backdrop-filter: blur(12px);
+    padding: 15px 22px;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 12px;
+    margin-bottom: 10px;
+}
+
+#hud h2 {
+    color: #7cecff;
+    font-size: 20px;
+    letter-spacing: 2px;
+}
+
+#hud p {
+    font-size: 13px;
+    margin-top: 8px;
+    color: #c8d9e8;
+}
+
+#counter {
+    font-size: 19px;
+    color: #ffd66b;
+    font-weight: bold;
+}
+
+#center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(3, 10, 20, 0.72);
